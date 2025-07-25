@@ -9,7 +9,7 @@ __pycache__/
 # Log files
 logs/
 *.log
-src.*
+src.log
 
 # Distribution / packaging
 .Python
@@ -82,7 +82,7 @@ target/
 
 # Trained model artifacts and results
 trained_models/
-models/
+/models/
 results/
 *.pt
 *.pth
@@ -113,7 +113,7 @@ Thumbs.db
 # Experiment logs and artifacts
 logs/
 *.log
-src.*
+src.log
 
 # HPO study artifacts
 *.pkl
