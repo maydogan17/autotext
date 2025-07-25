@@ -1,0 +1,124 @@
+# AutoML Text Classification Configuration
+# Only contains parameters that are actively used in the codebase
+
+# --- Data Configuration ---
+data:
+  dataset_name: "ag_news" # Dataset folder name in data/ directory
+  text_column: "text" # Column name containing text data
+  label_column: "label" # Column name containing labels
+  max_samples: 10000 # Large sample size for GPU training
+  validation_size: 0.15 # Fraction of training data to use for validation
+  random_state: 42 # Random seed for reproducible data splits
+  max_length: 256 # Longer sequences for better text representation
+
+# --- Model Configuration ---
+models:
+  # Training parameters
+  training:
+    batch_size: 128 # Larger batch size for GPU training
+
+  # Model-specific hyperparameters for HPO
+  hyperparameters:
+    # Feed-Forward Network
+    ffn:
+      embedding_dim: [256, 512, 768, 1024] # Large embedding dimensions for GPU
+      hidden_dim: [512, 1024, 2048, 4096] # Large hidden dimensions for deep networks
+      num_layers: [3, 4, 5, 6, 8] # More layers for complex representations
+      dropout: [0.1, 0.2, 0.3, 0.4] # Dropout for regularization
+      activation: ["relu", "gelu", "swish"] # Multiple activation functions
+      learning_rate: [0.0001, 0.0002, 0.0005, 0.001] # FFN-specific learning rates
+
+    # Convolutional Neural Network
+    cnn:
+      embedding_dim: [256, 512, 768, 1024] # Large embedding dimensions for GPU
+      num_filters: [128, 256, 384, 512, 768] # More filters for complex feature extraction
+      filter_sizes: [[2, 3, 4], [3, 4, 5], [2, 3, 4, 5], [3, 4, 5, 6], [2, 3, 4, 5, 6]] # Various kernel combinations
+      dropout: [0.1, 0.2, 0.3, 0.4] # Dropout for regularization
+      pooling: ["max", "avg", "adaptive_max"] # Pooling operation type
+      learning_rate: [0.0001, 0.0002, 0.0005, 0.001] # CNN-specific learning rates
+
+    # Transformer (custom implementation with enhanced features)
+    transformer:
+      embedding_dim: [256, 384, 512, 768, 1024] # Large embedding dimensions (must be divisible by num_heads)
+      num_heads: [8, 12, 16, 24] # More attention heads for complex attention patterns
+      num_layers: [4, 6, 8, 12] # Deeper transformer architecture
+      feedforward_dim: [1024, 2048, 3072, 4096] # Large feedforward dimensions
+      dropout: [0.1, 0.15, 0.2, 0.25, 0.3] # Dropout for regularization
+      max_position_embeddings: [512, 1024] # Support for longer sequences
+      learning_rate: [0.00001, 0.00005, 0.0001, 0.0002, 0.0005] # Transformer-specific learning rates
+      warmup_steps: [200, 500, 1000, 2000] # More warmup steps for large models
+      warmup_ratio: [0.1, 0.15, 0.2, 0.25] # Comprehensive warmup ratio options
+
+    # BERT-based model - FUTURE USE
+    bert:
+      model_name: ["distilbert-base-uncased", "bert-base-uncased"] # Pre-trained model name
+      dropout: [0.1, 0.2, 0.3] # Dropout probability for classifier head
+      freeze_base: [false, true] # Whether to freeze base model parameters
+      num_fine_tune_layers: [1, 2, 4, 6] # Number of top layers to fine-tune
+      learning_rate_multiplier: [0.1, 0.5, 1.0] # Learning rate multiplier for base model
+
+# --- HPO Configuration ---
+hpo:
+  num_trials: 25 # Large number of trials for comprehensive GPU testing
+  timeout: 7200 # Extended timeout (2 hours) for thorough optimization
+  pruning: true # Enable pruning for efficient resource usage
+  pruner: "median" # Pruning strategy for early trial termination
+  metric: "f1_weighted" # Optimization metric
+  direction: "maximize" # Optimization direction
+  sampler: "TPE" # Tree-structured Parzen Estimator for efficient sampling
+
+  # Enhanced pruning configuration for large-scale training
+  pruner_params:
+    n_startup_trials: 5 # More startup trials for stable pruning decisions
+    n_warmup_steps: 3 # More warmup steps for better evaluation
+    interval_steps: 1 # Frequent evaluation for efficient pruning
+
+# --- Enhanced Training Configuration ---
+training:
+  epochs: 15 # More epochs for comprehensive training with GPU
+  max_epochs: 15 # Maximum number of training epochs
+  optimizer: "adamw" # AdamW optimizer for better performance
+  weight_decay: 0.01 # Enhanced L2 regularization
+  
+  # Enhanced learning rate scheduling with warmup support
+  lr_scheduler:
+    type: "warmup" # Use our enhanced warmup scheduling
+    warmup_method: "linear" # Linear warmup strategy
+    warmup_ratio: 0.15 # 15% of training for warmup
+    factor: 0.5 # Learning rate reduction factor
+    patience: 3 # Epochs to wait before reducing LR
+    eta_min: 0.000001 # Minimum learning rate
+    
+  # Enhanced early stopping for longer training
+  early_stopping:
+    patience: 5 # More patience for larger models
+    min_delta: 0.001 # Minimum improvement threshold
+    restore_best_weights: true # Restore best model weights
+    
+  # Additional training enhancements
+  max_grad_norm: 1.0 # Maximum gradient norm for clipping
+  class_weights: "balanced" # Class weight handling for imbalanced datasets
+
+# --- Preprocessing Configuration ---
+preprocessing:
+  lowercase: true # Convert text to lowercase
+  remove_special_chars: false # Keep special characters for better representation
+  remove_numbers: false # Keep numbers for better context
+  remove_punctuation: false # Keep punctuation for semantic understanding
+  vocab_size: 50000 # Large vocabulary for comprehensive representation
+  min_token_freq: 2 # Minimum token frequency for vocabulary inclusion
+  
+# --- Reproducibility Configuration ---
+reproducibility:
+  seed: 42 # Random seed for reproducible results
+
+# --- Output Configuration ---
+output:
+  base_dir: "results" # Base directory for all outputs
+  experiment_name: "gpu_comprehensive_training" # Experiment identifier
+  model_dir: "models" # Directory for saved models
+  save_models: true # Save trained models
+  save_predictions: true # Save model predictions
+  config_filename: "config.yaml" # Configuration file name
+  results_filename: "results.json" # Results file name
+  config_filename: "config.yaml" # Filename for saved config
