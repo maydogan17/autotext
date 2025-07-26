@@ -7,6 +7,7 @@ data:
   text_column: "text" # Column name containing text data
   label_column: "label" # Column name containing labels
   max_samples: 10000 # Large sample size for GPU training
+  sampling_strategy: "balanced" # "balanced" for equal class distribution, "proportional" for maintaining original ratios
   validation_size: 0.15 # Fraction of training data to use for validation
   random_state: 42 # Random seed for reproducible data splits
   max_length: 256 # Longer sequences for better text representation

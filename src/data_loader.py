@@ -337,35 +337,70 @@ class DataProcessor:
         
         # Limit samples if specified with stratified sampling to maintain class distribution
         max_samples = self.config.data.get('max_samples')
+        
+        if max_samples is None:
+            max_samples = len(train_df) - 1
+            
+        # Ensure max_samples is not larger than available data
+        if max_samples is not None and max_samples >= len(train_df):
+            max_samples = len(train_df) - 1
+
         if max_samples is not None and max_samples < len(train_df):
             label_col = self.config.data['label_column']
             
             # Get class distribution
             class_counts = train_df[label_col].value_counts().sort_index()
             total_classes = len(class_counts)
+            total_available = len(train_df)
             
-            # Calculate samples per class (equal distribution)
-            samples_per_class = max_samples // total_classes
-            remaining_samples = max_samples % total_classes
+            # Choose sampling strategy based on config (default: proportional)
+            sampling_strategy = self.config.data.get('sampling_strategy', 'proportional')
             
-            # Stratified sampling to maintain equal class distribution
-            sampled_dfs = []
-            for i, (class_label, class_count) in enumerate(class_counts.items()):
-                class_df = train_df[train_df[label_col] == class_label]
+            if sampling_strategy == 'balanced':
+                # Equal distribution across classes (current behavior)
+                samples_per_class = max_samples // total_classes
+                remaining_samples = max_samples % total_classes
                 
-                # Add one extra sample to first 'remaining_samples' classes
-                target_samples = samples_per_class + (1 if i < remaining_samples else 0)
-                
-                # Sample from this class (or take all if fewer samples available)
-                if len(class_df) >= target_samples:
-                    sampled_class_df = class_df.sample(
-                        n=target_samples, 
-                        random_state=self.config.data['random_state']
-                    )
-                else:
-                    sampled_class_df = class_df  # Take all available samples
-                
-                sampled_dfs.append(sampled_class_df)
+                sampled_dfs = []
+                for i, (class_label, class_count) in enumerate(class_counts.items()):
+                    class_df = train_df[train_df[label_col] == class_label]
+                    
+                    # Add one extra sample to first 'remaining_samples' classes
+                    target_samples = samples_per_class + (1 if i < remaining_samples else 0)
+                    
+                    # Sample from this class (or take all if fewer samples available)
+                    if len(class_df) >= target_samples:
+                        sampled_class_df = class_df.sample(
+                            n=target_samples, 
+                            random_state=self.config.data['random_state']
+                        )
+                    else:
+                        sampled_class_df = class_df  # Take all available samples
+                    
+                    sampled_dfs.append(sampled_class_df)
+            
+            else:  # proportional sampling (maintains original distribution)
+                sampled_dfs = []
+                for class_label, class_count in class_counts.items():
+                    class_df = train_df[train_df[label_col] == class_label]
+                    
+                    # Calculate proportional samples for this class
+                    class_proportion = class_count / total_available
+                    target_samples = int(max_samples * class_proportion)
+                    
+                    # Ensure at least 1 sample per class if it exists
+                    target_samples = max(1, target_samples)
+                    
+                    # Sample from this class (or take all if fewer samples available)
+                    if len(class_df) >= target_samples:
+                        sampled_class_df = class_df.sample(
+                            n=target_samples, 
+                            random_state=self.config.data['random_state']
+                        )
+                    else:
+                        sampled_class_df = class_df  # Take all available samples
+                    
+                    sampled_dfs.append(sampled_class_df)
             
             # Combine all sampled classes and shuffle
             train_df = pd.concat(sampled_dfs, ignore_index=True)
