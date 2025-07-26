@@ -45,7 +45,7 @@ models:
       feedforward_dim: [1024, 2048, 3072, 4096] # Large feedforward dimensions
       dropout: [0.1, 0.15, 0.2, 0.25, 0.3] # Dropout for regularization
       max_position_embeddings: [512, 1024] # Support for longer sequences
-      learning_rate: [0.00001, 0.00005, 0.0001, 0.0002, 0.0005] # Transformer-specific learning rates
+      learning_rate: [0.0001, 0.0002, 0.0005, 0.001, 0.002] # Higher learning rates for better convergence
       warmup_steps: [200, 500, 1000, 2000] # More warmup steps for large models
       warmup_ratio: [0.1, 0.15, 0.2, 0.25] # Comprehensive warmup ratio options
 

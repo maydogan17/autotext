@@ -155,7 +155,8 @@ class MultiHeadAttention(nn.Module):
                 mask = mask.expand(-1, self.num_heads, -1, -1)
             
             # Apply mask: set masked positions to large negative value
-            scores = scores.masked_fill(mask == 0, -1e9)
+            # Use -1e4 instead of -1e9 to avoid numerical issues
+            scores = scores.masked_fill(mask == 0, -1e4)
         
         # Apply softmax
         attention_weights = F.softmax(scores, dim=-1)
@@ -189,10 +190,10 @@ class TransformerEncoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(embedding_dim)
         self.norm2 = nn.LayerNorm(embedding_dim)
         
-        # Feedforward network
+        # Feedforward network with GELU activation (better for transformers)
         self.feedforward = nn.Sequential(
             nn.Linear(embedding_dim, feedforward_dim),
-            nn.ReLU(),
+            nn.GELU(),  # GELU works better than ReLU for transformers
             nn.Dropout(dropout),
             nn.Linear(feedforward_dim, embedding_dim)
         )
@@ -202,7 +203,7 @@ class TransformerEncoderLayer(nn.Module):
     
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Forward pass of transformer encoder layer.
+        Forward pass of transformer encoder layer with pre-normalization.
         
         Args:
             x: Input tensor (seq_len, batch_size, embedding_dim)
@@ -211,13 +212,16 @@ class TransformerEncoderLayer(nn.Module):
         Returns:
             Output tensor
         """
-        # Self-attention with residual connection and layer norm
-        attn_output = self.self_attention(x, x, x, mask)
-        x = self.norm1(x + self.dropout(attn_output))
+        # Pre-normalization: better for training stability
+        # Self-attention with residual connection and pre-layer norm
+        normed_x = self.norm1(x)
+        attn_output = self.self_attention(normed_x, normed_x, normed_x, mask)
+        x = x + self.dropout(attn_output)
         
-        # Feedforward with residual connection and layer norm
-        ff_output = self.feedforward(x)
-        x = self.norm2(x + self.dropout(ff_output))
+        # Feedforward with residual connection and pre-layer norm
+        normed_x = self.norm2(x)
+        ff_output = self.feedforward(normed_x)
+        x = x + self.dropout(ff_output)
         
         return x
 
@@ -294,11 +298,12 @@ class TransformerTextClassifier(BaseTextClassifier):
             for _ in range(self.num_layers)
         ])
         
-        # Classification head
+        # Classification head with layer normalization for better stability
         self.classifier = nn.Sequential(
+            nn.LayerNorm(self.embedding_dim),  # Add layer norm before classification
             nn.Dropout(self.dropout),
             nn.Linear(self.embedding_dim, self.embedding_dim // 2),
-            nn.ReLU(),
+            nn.GELU(),  # Use GELU for consistency
             nn.Dropout(self.dropout),
             nn.Linear(self.embedding_dim // 2, self.num_classes)
         )
@@ -307,17 +312,20 @@ class TransformerTextClassifier(BaseTextClassifier):
         self.init_weights()
     
     def init_weights(self) -> None:
-        """Initialize model weights."""
-        # Initialize embeddings
-        nn.init.normal_(self.embedding.weight, mean=0, std=0.1)
+        """Initialize model weights with better initialization."""
+        # Initialize embeddings with smaller std for better training stability
+        nn.init.normal_(self.embedding.weight, mean=0, std=0.02)
         nn.init.constant_(self.embedding.weight[0], 0)  # padding token
         
-        # Initialize linear layers
+        # Initialize linear layers with Xavier/Glorot initialization
         for module in self.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.LayerNorm):
+                nn.init.constant_(module.bias, 0)
+                nn.init.constant_(module.weight, 1.0)
     
     def create_padding_mask(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -374,8 +382,9 @@ class TransformerTextClassifier(BaseTextClassifier):
         # Word embeddings
         embeddings = self.embedding(input_ids)  # (batch_size, seq_len, embedding_dim)
         
-        # Scale embeddings
-        embeddings = embeddings * math.sqrt(self.embedding_dim)
+        # Scale embeddings (common practice in transformers for better training)
+        # Use a more conservative scaling factor
+        embeddings = embeddings * math.sqrt(self.embedding_dim) * 0.5
         
         # Transpose for positional encoding (seq_len, batch_size, embedding_dim)
         embeddings = embeddings.transpose(0, 1)
